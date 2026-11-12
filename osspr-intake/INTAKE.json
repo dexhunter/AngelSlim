@@ -1,0 +1,68 @@
+[
+  {
+    "upstream_repo": "Tencent/AngelSlim",
+    "head_sha": "eb4f5d6d77d6b0f671057b35f197f24a6b4312ef",
+    "file": "angelslim/compressor/sparsity/algorithms/minference/reference.py",
+    "function": "_masked_softmax_attention",
+    "native_test_cmd": "python3 -m pytest tests/sparse/test_algorithms_integration.py::test_a_shape_no_nan_on_empty_window tests/sparse/test_algorithms_integration.py::test_vertical_and_slash_diagonal_alignment -q",
+    "bench_cmd": "python3 osspr-intake/harness/bench_masked_softmax.py",
+    "baseline_median_ms": 305.888781,
+    "baseline_noise_pct": 5.570668,
+    "tests_pass_on_baseline": true,
+    "workload": "One causal 1x8x2048x128 prefill, the masked softmax shared by a_shape, tri_shape, and vertical-and-slash.",
+    "notes": "The helper materializes a float32 (L, L) score, fills masked keys with -inf, and softmaxes before the value multiply. scaled_dot_product_attention with the same boolean keep mask (True = participate) matched within 6.0e-7 absolute and dropped the median from 305.9 ms to 106.5 ms on this tensor (about 199 ms). Noise is (max-min)/median over 7 calls on one thread. Open PRs do not touch this file. Merged #393 (dexhunter) changed vertical_and_slash_attention and _scatter_diagonals in this file, not this helper. No open issue names the function."
+  },
+  {
+    "upstream_repo": "Tencent/AngelSlim",
+    "head_sha": "eb4f5d6d77d6b0f671057b35f197f24a6b4312ef",
+    "file": "angelslim/compressor/sparsity/algorithms/flashprefill/reference.py",
+    "function": "flashprefill_reference_prefill",
+    "native_test_cmd": "python3 -m pytest tests/sparse/test_algorithms_integration.py::test_flashprefill_dense_path_without_flash_attn_takes_policy -q",
+    "bench_cmd": "python3 osspr-intake/harness/bench_flashprefill_reference.py",
+    "baseline_median_ms": 356.607652,
+    "baseline_noise_pct": 2.616432,
+    "tests_pass_on_baseline": true,
+    "workload": "One bf16 1x8x2048x128 FlashPrefill reference prefill at alpha 0.5, block size 128, sink 128, and window 256.",
+    "notes": "build_block_keep_mask is a small einsum. The reference then forms a full (L, L) score, softmaxes it, and multiplies by V. scaled_dot_product_attention on that boolean mask matched the bf16 output within one ulp (max abs 0.015625) and dropped the median from 356.6 ms to 118.2 ms (about 238 ms). Noise is (max-min)/median over 7 calls on one thread. No open PR or issue touches this file, and no dexhunter PR edits it."
+  },
+  {
+    "upstream_repo": "Tencent/AngelSlim",
+    "head_sha": "eb4f5d6d77d6b0f671057b35f197f24a6b4312ef",
+    "file": "angelslim/compressor/sparsity/algorithms/vecattention/reference.py",
+    "function": "vecattention_reference_prefill",
+    "native_test_cmd": "python3 -m pytest tests/sparse/test_algorithms_integration.py::test_vecattention_reference_threshold_behaviour -q",
+    "bench_cmd": "python3 osspr-intake/harness/bench_vecattention_prefill.py",
+    "baseline_median_ms": 356.809762,
+    "baseline_noise_pct": 7.111110,
+    "tests_pass_on_baseline": true,
+    "workload": "One 1x8x2048x128 VecAttention reference prefill at MinP threshold 0.5, query block 64, and key block 16.",
+    "notes": "build_vecattention_keep_mask is already the batched matmul from merged #395. This prefill still materializes a full (L, L) score from that mask. scaled_dot_product_attention with the same keep mask matched within 6.0e-7 absolute and dropped the median from 356.8 ms to 207.1 ms (about 150 ms). Noise is (max-min)/median over 7 calls on one thread. The named test skips without CUDA and pytest exits 0; the function is pure torch and the harness runs it on CPU. Open PRs do not touch this file. Merged #395 (dexhunter, today) changed build_vecattention_keep_mask only. No open issue names this function."
+  },
+  {
+    "upstream_repo": "Tencent/AngelSlim",
+    "head_sha": "eb4f5d6d77d6b0f671057b35f197f24a6b4312ef",
+    "file": "angelslim/compressor/qat/modules/quantizer.py",
+    "function": "_quant_fp4_element",
+    "native_test_cmd": "python3 -m pytest tests/test_focus_nvfp4_export.py::test_nvfp4_packed_dequant_matches_focus_fake_quantizer tests/test_focus_nvfp4_export.py::test_nvfp4_subgroup_packing_matches_focus_fake_quantizer -q",
+    "bench_cmd": "python3 osspr-intake/harness/bench_quant_fp4_element.py",
+    "baseline_median_ms": 1827.755601,
+    "baseline_noise_pct": 6.240827,
+    "tests_pass_on_baseline": true,
+    "workload": "One fp32 4096x8192 weight snapped to E2M1 by the FOCUS fake-quant element routine, ebits 2, mbits 3, round-half-to-even.",
+    "notes": "The even-rounding branch allocates torch.zeros_like(weight) and a full-size `% 2` tie mask. torch.round is already half-to-even; wrapping it in the same straight-through pattern as floor_ste matched the forward (max abs 0) and the gradient (max abs 0 on 2001 linspace values, including the ties) and dropped the median from 1827.8 ms to 1373.9 ms (about 454 ms). Noise is (max-min)/median over 5 calls on one thread. Quantizer._fake_quant_nvfp4 and _fake_quant_mxfp4 both call this on every QAT weight. No open PR touches quantizer.py. Open issue #118 asks whether NVFP4 training exists and does not name this function. No dexhunter PR edits the file."
+  },
+  {
+    "upstream_repo": "Tencent/AngelSlim",
+    "head_sha": "eb4f5d6d77d6b0f671057b35f197f24a6b4312ef",
+    "file": "angelslim/compressor/quant/modules/helper_layer.py",
+    "function": "nvfp4_cast_to_e2m1",
+    "native_test_cmd": "python3 -m pytest tests/test_focus_nvfp4_export.py::test_nvfp4_packed_dequant_matches_focus_fake_quantizer tests/test_focus_nvfp4_export.py::test_nvfp4_subgroup_packing_matches_focus_fake_quantizer -q",
+    "bench_cmd": "python3 osspr-intake/harness/peak_nvfp4_cast.py",
+    "metric_kind": "peak_memory_bytes",
+    "baseline_value": 904925184,
+    "baseline_noise_pct": 0.514192,
+    "tests_pass_on_baseline": true,
+    "workload": "One fp32 4096x8192 linear weight rounded to NVFP4 E2M1 uint4 codes during packing.",
+    "notes": "Round-half-to-even expands a 7-wide tie mask (`weight.abs().unsqueeze(-1) == bounds`) so the call holds a (*weight.shape, 7) bool tensor and a matching product. Equality against the three odd bounds 0.75, 1.75, and 3.5 reproduced the uint4 codes exactly and cut sampled peak RSS from 904925184 bytes to 469364736 bytes (about 415 MiB). Noise is (max-min)/median over 5 RSS samples on one thread. The same rewrite cut a 2048x4096 call from 305 ms to 158 ms. nvfp4_quantize_pack calls this, which the named tests exercise. Open PR #394 is mxfp4_cast_to_e2m1 in another file. Open issue #118 asks if NVFP4 training is supported and does not name this function. No open PR and no dexhunter PR edit helper_layer.py."
+  }
+]
